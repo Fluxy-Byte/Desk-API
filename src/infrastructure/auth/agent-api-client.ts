@@ -15,8 +15,10 @@ export async function verifyCredentials(
       "Content-Type": "application/json",
       // Better Auth do Agent-Api valida trustedOrigins mesmo em chamadas
       // servidor-a-servidor — precisa de uma origem cadastrada em
-      // CORS_ALLOWED_ORIGINS lá (usamos a origem do Desk-Console).
-      Origin: "http://localhost:7074",
+      // CORS_ALLOWED_ORIGINS lá. Usamos a primeira origem da nossa própria
+      // lista (a do Desk-Console), que já é mantida em sincronia com a lista
+      // do Agent-Api nos três .env deste serviço.
+      Origin: env.CORS_ALLOWED_ORIGINS[0],
     },
     body: JSON.stringify({ email, password }),
   });
