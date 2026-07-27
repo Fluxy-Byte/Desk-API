@@ -33,3 +33,41 @@ export async function verifyCredentials(
 
   return body.user;
 }
+
+/// Dispara o e-mail de redefinição de senha do Better Auth do Agent-Api —
+/// mesma conta/hash de senha usada pelo login acima. `redirectTo` precisa
+/// estar na lista de trustedOrigins do Agent-Api (CORS_ALLOWED_ORIGINS de
+/// lá já inclui as origens de produção/dev do Desk-Console).
+export async function requestPasswordReset(email: string, redirectTo: string): Promise<void> {
+  const response = await fetch(`${env.AGENT_API_BASE_URL}/api/auth/request-password-reset`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: env.CORS_ALLOWED_ORIGINS[0],
+    },
+    body: JSON.stringify({ email, redirectTo }),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? "Não foi possível solicitar a redefinição de senha.");
+  }
+}
+
+/// Confirma a redefinição (token do link recebido por e-mail + nova senha) —
+/// atualiza a mesma conta/hash usada pelo Agent-Api e por este login.
+export async function resetPassword(newPassword: string, token: string): Promise<void> {
+  const response = await fetch(`${env.AGENT_API_BASE_URL}/api/auth/reset-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: env.CORS_ALLOWED_ORIGINS[0],
+    },
+    body: JSON.stringify({ newPassword, token }),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? "Não foi possível redefinir a senha. O link pode ter expirado.");
+  }
+}

@@ -1,10 +1,41 @@
 import { Router } from "express";
-import { verifyCredentials } from "../../../infrastructure/auth/agent-api-client";
+import { env } from "../../../config/env";
+import { requestPasswordReset, resetPassword, verifyCredentials } from "../../../infrastructure/auth/agent-api-client";
 import { signRealtimeToken, signSessionToken } from "../../../infrastructure/auth/jwt";
 import { prisma } from "../../../infrastructure/database/prisma/client";
 import { requireAuth, type AuthedRequest } from "../middlewares/require-auth";
 
 export const authRouter = Router();
+
+authRouter.post("/auth/forgot-password", async (req, res) => {
+  const { email } = req.body ?? {};
+  if (!email) {
+    res.status(400).json({ success: false, result: null, message: "Informe o e-mail." });
+    return;
+  }
+
+  try {
+    await requestPasswordReset(email, `${env.CORS_ALLOWED_ORIGINS[0]}/reset-password`);
+    res.json({ success: true, result: null, message: "Se este e-mail existir, você vai receber o link de redefinição." });
+  } catch (err) {
+    res.status(502).json({ success: false, result: null, message: err instanceof Error ? err.message : "Erro ao solicitar redefinição." });
+  }
+});
+
+authRouter.post("/auth/reset-password", async (req, res) => {
+  const { newPassword, token } = req.body ?? {};
+  if (!newPassword || !token) {
+    res.status(400).json({ success: false, result: null, message: "Informe a nova senha e o token." });
+    return;
+  }
+
+  try {
+    await resetPassword(newPassword, token);
+    res.json({ success: true, result: null, message: "Senha redefinida com sucesso." });
+  } catch (err) {
+    res.status(400).json({ success: false, result: null, message: err instanceof Error ? err.message : "Não foi possível redefinir a senha." });
+  }
+});
 
 authRouter.post("/auth/login", async (req, res) => {
   const { email, password, companyId } = req.body ?? {};
