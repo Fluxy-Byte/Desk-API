@@ -24,7 +24,8 @@ interface DeskMessageOutboundPayload {
 
 async function publish(channel: Channel, queue: string, payload: object): Promise<void> {
   await assertQueueWithDlq(channel, queue);
-  channel.sendToQueue(queue, Buffer.from(JSON.stringify(payload)), { persistent: true });
+  const ok = channel.sendToQueue(queue, Buffer.from(JSON.stringify(payload)), { persistent: true });
+  console.log(`[DESK-MSG][publisher] enviado para fila "${queue}" — sendToQueue retornou ${ok} — payload=${JSON.stringify(payload)}`);
 }
 
 /// Usado só para mensagens de sistema (fechamento com closingMessage) — o

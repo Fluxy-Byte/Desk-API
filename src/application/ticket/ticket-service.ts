@@ -75,24 +75,42 @@ export const ticketService = {
     userId: string,
     input: { text: string; messageType?: "TEXT" | "AUDIO" | "IMAGE" | "DOCUMENT" | "STICKER"; mediaUrl?: string },
   ) {
+    console.log(`[DESK-MSG][ticket-service.sendMessage] início — ticketId=${ticketId} userId=${userId}`);
+
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
       include: { messagingSession: true },
     });
-    if (!ticket) throw new NotFoundError("Ticket não encontrado.");
-    if (ticket.assignedUserId !== userId) throw new ForbiddenError("Você não é o atendente responsável por este ticket.");
-    if (ticket.status !== "IN_PROGRESS") throw new ValidationError("Ticket não está em atendimento.");
+    if (!ticket) {
+      console.error(`[DESK-MSG][ticket-service.sendMessage] ticket ${ticketId} não encontrado`);
+      throw new NotFoundError("Ticket não encontrado.");
+    }
+    if (ticket.assignedUserId !== userId) {
+      console.error(
+        `[DESK-MSG][ticket-service.sendMessage] ticket ${ticketId} pertence a assignedUserId=${ticket.assignedUserId}, não a userId=${userId}`,
+      );
+      throw new ForbiddenError("Você não é o atendente responsável por este ticket.");
+    }
+    if (ticket.status !== "IN_PROGRESS") {
+      console.error(`[DESK-MSG][ticket-service.sendMessage] ticket ${ticketId} com status=${ticket.status}, esperado IN_PROGRESS`);
+      throw new ValidationError("Ticket não está em atendimento.");
+    }
 
     // Regra das 24h: sempre calculada a partir da ÚLTIMA mensagem do cliente,
     // nunca armazenada como flag — ver MessagingSession no schema canônico.
     const elapsed = Date.now() - ticket.messagingSession.lastCustomerMessageAt.getTime();
+    console.log(
+      `[DESK-MSG][ticket-service.sendMessage] ticketId=${ticketId} janela 24h — elapsedMs=${elapsed} lastCustomerMessageAt=${ticket.messagingSession.lastCustomerMessageAt.toISOString()}`,
+    );
     if (elapsed > SESSION_WINDOW_MS) {
+      console.error(`[DESK-MSG][ticket-service.sendMessage] ticketId=${ticketId} janela de 24h expirada — mensagem NÃO será enviada`);
       throw new ConflictError(
         "A janela de atendimento de 24 horas foi encerrada. É necessário um disparo ativo com template aprovado pela Meta para reiniciar a conversa.",
         "SESSION_WINDOW_EXPIRED",
       );
     }
 
+    console.log(`[DESK-MSG][ticket-service.sendMessage] ticketId=${ticketId} publicando em desk.message.outbound`);
     const channel = await getRabbitChannel();
     await publishDeskMessageOutbound(channel, {
       ticketId: ticket.id,
@@ -101,6 +119,7 @@ export const ticketService = {
       messageType: input.messageType ?? "TEXT",
       mediaUrl: input.mediaUrl,
     });
+    console.log(`[DESK-MSG][ticket-service.sendMessage] ticketId=${ticketId} publicado com sucesso em desk.message.outbound`);
 
     return { queued: true };
   },

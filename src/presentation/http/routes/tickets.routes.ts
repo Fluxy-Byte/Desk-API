@@ -39,7 +39,12 @@ ticketsRouter.post(
   routeHandler(async (req) => {
     const parsed = sendMessageSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError("Dados inválidos.");
-    return ticketService.sendMessage(String(req.params.id), req.auth!.userId, parsed.data);
+    console.log(
+      `[DESK-MSG] HTTP POST /tickets/${req.params.id}/messages recebido — userId=${req.auth!.userId} messageType=${parsed.data.messageType ?? "TEXT"} textLen=${parsed.data.text.length}`,
+    );
+    const result = await ticketService.sendMessage(String(req.params.id), req.auth!.userId, parsed.data);
+    console.log(`[DESK-MSG] HTTP POST /tickets/${req.params.id}/messages concluído — result=${JSON.stringify(result)}`);
+    return result;
   }),
 );
 
