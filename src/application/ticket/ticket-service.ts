@@ -5,13 +5,47 @@ import { getMongoDb } from "../../infrastructure/database/mongo/client";
 import { prisma } from "../../infrastructure/database/prisma/client";
 import { publishDeskEvent } from "../../infrastructure/pubsub/desk-events";
 import { getRabbitChannel } from "../../infrastructure/queue/rabbitmq/connection";
-import { publishDeskMessageOutbound, publishOutboundMessage } from "../../infrastructure/queue/rabbitmq/publisher";
+import { publishDeskMessageOutbound, publishMarkRead, publishOutboundMessage } from "../../infrastructure/queue/rabbitmq/publisher";
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 async function listMyQueueIds(userId: string): Promise<string[]> {
   const memberships = await prisma.queueMember.findMany({ where: { userId }, select: { queueId: true } });
   return memberships.map((m) => m.queueId);
+}
+
+/// Última mensagem do CLIENTE na sessão — é ela que precisa ser marcada como
+/// lida (a Cloud API só aceita marcar leitura de uma mensagem inbound).
+async function getLastInboundExternalMessageId(messagingSessionId: string): Promise<string | null> {
+  const db = await getMongoDb();
+  const docs = await db
+    .collection<MessageDocument>(MESSAGES_COLLECTION)
+    .find({ messagingSessionId, direction: "INBOUND" })
+    .sort({ createdAt: -1 })
+    .limit(1)
+    .toArray();
+  return docs[0]?.externalMessageId ?? null;
+}
+
+async function notifyReadReceipt(ticketId: string, userId: string, typingIndicator: boolean) {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    include: { target: { include: { whatsappChannel: true } } },
+  });
+  if (!ticket) throw new NotFoundError("Ticket não encontrado.");
+  if (ticket.assignedUserId !== userId) throw new ForbiddenError("Você não é o atendente responsável por este ticket.");
+
+  const externalMessageId = await getLastInboundExternalMessageId(ticket.messagingSessionId);
+  if (!externalMessageId) return { queued: false };
+
+  const channel = await getRabbitChannel();
+  await publishMarkRead(channel, {
+    phoneNumberId: ticket.target.whatsappChannel.phoneNumberId,
+    externalMessageId,
+    typingIndicator,
+  });
+
+  return { queued: true };
 }
 
 export const ticketService = {
@@ -122,6 +156,18 @@ export const ticketService = {
     console.log(`[DESK-MSG][ticket-service.sendMessage] ticketId=${ticketId} publicado com sucesso em desk.message.outbound`);
 
     return { queued: true };
+  },
+
+  /// Chamado quando o atendente abre o ticket — marca a última mensagem do
+  /// cliente como lida (tique azul) no WhatsApp dele.
+  async markRead(ticketId: string, userId: string) {
+    return notifyReadReceipt(ticketId, userId, false);
+  },
+
+  /// Chamado (com throttle no frontend) enquanto o atendente digita — liga o
+  /// indicador "digitando..." no WhatsApp do cliente por ~25s.
+  async notifyTyping(ticketId: string, userId: string) {
+    return notifyReadReceipt(ticketId, userId, true);
   },
 
   async close(ticketId: string, userId: string) {

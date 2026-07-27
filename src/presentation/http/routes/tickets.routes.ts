@@ -49,6 +49,16 @@ ticketsRouter.post(
 );
 
 ticketsRouter.post(
+  "/:id/read",
+  routeHandler(async (req) => ticketService.markRead(String(req.params.id), req.auth!.userId)),
+);
+
+ticketsRouter.post(
+  "/:id/typing",
+  routeHandler(async (req) => ticketService.notifyTyping(String(req.params.id), req.auth!.userId)),
+);
+
+ticketsRouter.post(
   "/:id/close",
   routeHandler(async (req) => ticketService.close(String(req.params.id), req.auth!.userId)),
 );

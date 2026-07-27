@@ -3,6 +3,7 @@ import { assertQueueWithDlq } from "./connection";
 
 export const QUEUE_OUTBOUND_MESSAGE_SEND = "outbound.message.send";
 export const QUEUE_DESK_MESSAGE_OUTBOUND = "desk.message.outbound";
+export const QUEUE_OUTBOUND_MESSAGE_MARK_READ = "outbound.message.mark-read";
 
 interface OutboundMessagePayload {
   target: unknown;
@@ -22,6 +23,12 @@ interface DeskMessageOutboundPayload {
   mediaUrl?: string;
 }
 
+interface MarkReadPayload {
+  phoneNumberId: string;
+  externalMessageId: string;
+  typingIndicator: boolean;
+}
+
 async function publish(channel: Channel, queue: string, payload: object): Promise<void> {
   await assertQueueWithDlq(channel, queue);
   const ok = channel.sendToQueue(queue, Buffer.from(JSON.stringify(payload)), { persistent: true });
@@ -37,4 +44,8 @@ export async function publishOutboundMessage(channel: Channel, payload: Outbound
 
 export async function publishDeskMessageOutbound(channel: Channel, payload: DeskMessageOutboundPayload): Promise<void> {
   await publish(channel, QUEUE_DESK_MESSAGE_OUTBOUND, payload);
+}
+
+export async function publishMarkRead(channel: Channel, payload: MarkReadPayload): Promise<void> {
+  await publish(channel, QUEUE_OUTBOUND_MESSAGE_MARK_READ, payload);
 }
