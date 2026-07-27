@@ -9,6 +9,16 @@ import { publishDeskMessageOutbound, publishMarkRead, publishOutboundMessage } f
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+// Extensões de documento que a Meta Cloud API efetivamente aceita — mesmo
+// filtro do Desk-Console, repetido aqui como defesa em profundidade (não dá
+// pra confiar só na validação do cliente).
+const SUPPORTED_DOCUMENT_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt"]);
+
+function isSupportedDocument(fileName: string): boolean {
+  const extension = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
+  return SUPPORTED_DOCUMENT_EXTENSIONS.has(extension);
+}
+
 async function listMyQueueIds(userId: string): Promise<string[]> {
   const memberships = await prisma.queueMember.findMany({ where: { userId }, select: { queueId: true } });
   return memberships.map((m) => m.queueId);
@@ -128,6 +138,11 @@ export const ticketService = {
     if (ticket.status !== "IN_PROGRESS") {
       console.error(`[DESK-MSG][ticket-service.sendMessage] ticket ${ticketId} com status=${ticket.status}, esperado IN_PROGRESS`);
       throw new ValidationError("Ticket não está em atendimento.");
+    }
+
+    if (input.messageType === "DOCUMENT" && !isSupportedDocument(input.text)) {
+      console.error(`[DESK-MSG][ticket-service.sendMessage] ticketId=${ticketId} tipo de documento não suportado: ${input.text}`);
+      throw new ValidationError("Tipo de documento não suportado pelo WhatsApp. Use PDF, Word, Excel, PowerPoint ou TXT.");
     }
 
     // Regra das 24h: sempre calculada a partir da ÚLTIMA mensagem do cliente,
