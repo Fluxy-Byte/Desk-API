@@ -8,6 +8,7 @@ import { prisma } from "./infrastructure/database/prisma/client";
 import { startDeskEventsSubscriber } from "./infrastructure/realtime/desk-events-subscriber";
 import { startWsServer } from "./infrastructure/realtime/ws-server";
 import { getRabbitChannel } from "./infrastructure/queue/rabbitmq/connection";
+import { ensurePublicMediaBucketPolicy } from "./infrastructure/storage/s3-client";
 import { authRouter } from "./presentation/http/routes/auth.routes";
 import { queuesRouter } from "./presentation/http/routes/queues.routes";
 import { targetsRouter } from "./presentation/http/routes/targets.routes";
@@ -17,6 +18,7 @@ import { uploadsRouter } from "./presentation/http/routes/uploads.routes";
 async function main() {
   await prisma.$connect();
   await getRabbitChannel();
+  await ensurePublicMediaBucketPolicy();
 
   const app = express();
   app.use(
