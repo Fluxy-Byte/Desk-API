@@ -269,7 +269,18 @@ export const ticketService = {
     const target = await prisma.target.findUnique({ where: { id: targetId } });
     if (!target) throw new NotFoundError("Contato não encontrado.");
 
-    const mergedMetadata = input.metadata ? { ...((target.metadata as object) ?? {}), ...input.metadata } : target.metadata;
+    let mergedMetadata = target.metadata as Record<string, unknown> | null;
+    if (input.metadata) {
+      const merged: Record<string, unknown> = { ...((target.metadata as object) ?? {}), ...input.metadata };
+      // null é o sinal explícito de "remover esta chave" — é o que o
+      // Desk-Console manda quando o atendente clica na lixeira do metadado
+      // (merge raso não tem outro jeito de distinguir "sobrescrever" de
+      // "apagar", já que undefined some no JSON antes de chegar aqui).
+      for (const [key, value] of Object.entries(merged)) {
+        if (value === null) delete merged[key];
+      }
+      mergedMetadata = merged;
+    }
 
     return prisma.target.update({
       where: { id: target.id },
