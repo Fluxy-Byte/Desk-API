@@ -14,6 +14,10 @@ const sendMessageSchema = z.object({
   mediaUrl: z.string().optional(),
 });
 
+const closeTicketSchema = z.object({
+  closeTagId: z.string().trim().min(1).optional(),
+});
+
 ticketsRouter.get(
   "/",
   routeHandler(async (req) => {
@@ -58,9 +62,18 @@ ticketsRouter.post(
   routeHandler(async (req) => ticketService.notifyTyping(String(req.params.id), req.auth!.userId)),
 );
 
+ticketsRouter.get(
+  "/:id/close-tags",
+  routeHandler(async (req) => ticketService.getCloseTags(String(req.params.id), req.auth!.userId)),
+);
+
 ticketsRouter.post(
   "/:id/close",
-  routeHandler(async (req) => ticketService.close(String(req.params.id), req.auth!.userId)),
+  routeHandler(async (req) => {
+    const parsed = closeTicketSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError("Dados inválidos.");
+    return ticketService.close(String(req.params.id), req.auth!.userId, parsed.data.closeTagId);
+  }),
 );
 
 ticketsRouter.post(

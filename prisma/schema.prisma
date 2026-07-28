@@ -128,12 +128,30 @@ model ServiceIsland {
   whatsappChannel   WhatsappChannel @relation(fields: [whatsappChannelId], references: [id], onDelete: Cascade)
   name              String
 
+  requireCloseTag Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  queues Queue[]
+  queues    Queue[]
+  closeTags TicketCloseTag[]
 
   @@index([organizationId])
+}
+
+model TicketCloseTag {
+  id              String        @id @default(cuid())
+  serviceIslandId String
+  serviceIsland   ServiceIsland @relation(fields: [serviceIslandId], references: [id], onDelete: Cascade)
+  name            String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tickets Ticket[]
+
+  @@unique([serviceIslandId, name])
+  @@index([serviceIslandId])
 }
 
 model Queue {
@@ -266,6 +284,9 @@ model Ticket {
 
   closeReason TicketCloseReason?
 
+  closeTagId String?
+  closeTag   TicketCloseTag? @relation(fields: [closeTagId], references: [id], onDelete: SetNull)
+
   lastWaitingMessageSentAt DateTime?
 
   createdAt DateTime  @default(now())
@@ -279,6 +300,7 @@ model Ticket {
   @@index([targetId])
   @@index([messagingSessionId])
   @@index([assignedUserId])
+  @@index([closeTagId])
 }
 
 model TicketCounter {

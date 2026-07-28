@@ -185,18 +185,48 @@ export const ticketService = {
     return notifyReadReceipt(ticketId, userId, true);
   },
 
-  async close(ticketId: string, userId: string) {
+  /// Consultado ao abrir o dialog de encerramento no Desk-Console — resolve
+  /// ticket → fila → ilha pra saber quais tags oferecer e se a seleção é
+  /// obrigatória, sem mexer no shape da resposta principal do ticket.
+  async getCloseTags(ticketId: string, userId: string) {
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
-      include: { target: { include: { whatsappChannel: { include: { agent: true } } } }, messagingSession: true },
+      include: { queue: { include: { serviceIsland: { include: { closeTags: { orderBy: { createdAt: "asc" } } } } } } },
+    });
+    if (!ticket) throw new NotFoundError("Ticket não encontrado.");
+    if (ticket.assignedUserId !== userId) throw new ForbiddenError("Você não é o atendente responsável por este ticket.");
+
+    return {
+      requireCloseTag: ticket.queue.serviceIsland.requireCloseTag,
+      tags: ticket.queue.serviceIsland.closeTags.map((tag) => ({ id: tag.id, name: tag.name })),
+    };
+  },
+
+  async close(ticketId: string, userId: string, closeTagId?: string) {
+    const ticket = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: {
+        target: { include: { whatsappChannel: { include: { agent: true } } } },
+        messagingSession: true,
+        queue: { include: { serviceIsland: true } },
+      },
     });
     if (!ticket) throw new NotFoundError("Ticket não encontrado.");
     if (ticket.assignedUserId !== userId) throw new ForbiddenError("Você não é o atendente responsável por este ticket.");
     if (ticket.status === "CLOSED") throw new ValidationError("Ticket já está encerrado.");
 
+    const serviceIslandId = ticket.queue.serviceIslandId;
+    if (ticket.queue.serviceIsland.requireCloseTag && !closeTagId) {
+      throw new ValidationError("Selecione uma tag de fechamento para encerrar este ticket.");
+    }
+    if (closeTagId) {
+      const tag = await prisma.ticketCloseTag.findFirst({ where: { id: closeTagId, serviceIslandId } });
+      if (!tag) throw new ValidationError("Tag de fechamento inválida para esta fila.");
+    }
+
     const updated = await prisma.ticket.update({
       where: { id: ticket.id },
-      data: { status: "CLOSED", closedAt: new Date(), closeReason: "RESOLVED" },
+      data: { status: "CLOSED", closedAt: new Date(), closeReason: "RESOLVED", closeTagId: closeTagId ?? null },
     });
 
     // Devolve o contato pra IA — um ticket resolvido não deve deixar o target
