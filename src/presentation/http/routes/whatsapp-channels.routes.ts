@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { NotFoundError, ValidationError } from "../../../domain/errors/app-error";
-import { listWabaTemplates } from "../../../infrastructure/meta/meta-graph-client";
+import { getTemplateVariableCount, listWabaTemplates } from "../../../infrastructure/meta/meta-graph-client";
 import { prisma } from "../../../infrastructure/database/prisma/client";
 import { requireAuth } from "../middlewares/require-auth";
 import { routeHandler } from "../middlewares/route-handler";
@@ -8,8 +8,11 @@ import { routeHandler } from "../middlewares/route-handler";
 export const whatsappChannelsRouter = Router();
 whatsappChannelsRouter.use(requireAuth);
 
-/// Templates aprovados/cadastrados na Meta pro canal — usado no disparo ativo
-/// pelo Desk pra escolher o template (mesmo formato que o Agent Console usa).
+/// Templates aprovados cadastrados na Meta pro canal — usado no disparo ativo
+/// pelo Desk pra escolher o template. Mesmo shape de `GET /api/wc/:id/templates`
+/// do Agent-Api (id/name/category/language/status/components/variableCount),
+/// pra a tela de disparo do Desk poder reaproveitar o mesmo preview/lógica de
+/// variáveis da tela "Nova campanha" do Agent Console.
 whatsappChannelsRouter.get(
   "/:id/templates",
   routeHandler(async (req) => {
@@ -26,11 +29,13 @@ whatsappChannelsRouter.get(
     return templates
       .filter((t) => t.status === "APPROVED")
       .map((t) => ({
+        id: t.id,
         name: t.name,
-        language: t.language,
         category: t.category,
-        headerText: t.components.find((c) => c.type === "HEADER")?.text ?? null,
-        bodyText: t.components.find((c) => c.type === "BODY")?.text ?? null,
+        language: t.language,
+        status: t.status,
+        components: t.components,
+        variableCount: getTemplateVariableCount(t.components),
       }));
   }),
 );

@@ -24,6 +24,18 @@ async function listMyQueueIds(userId: string): Promise<string[]> {
   return memberships.map((m) => m.queueId);
 }
 
+/// Tempo de espera (criação até o atendente assumir) e duração do atendimento
+/// (assumiu até fechou) — mesmo cálculo de Agent-Api/service-island-service.ts,
+/// sempre computado na resposta, nunca persistido.
+function withDurations<T extends { createdAt: Date; assignedAt: Date | null; closedAt: Date | null }>(ticket: T) {
+  return {
+    ...ticket,
+    waitDurationMs: ticket.assignedAt ? ticket.assignedAt.getTime() - ticket.createdAt.getTime() : null,
+    handlingDurationMs:
+      ticket.assignedAt && ticket.closedAt ? ticket.closedAt.getTime() - ticket.assignedAt.getTime() : null,
+  };
+}
+
 /// Última mensagem do CLIENTE na sessão — é ela que precisa ser marcada como
 /// lida (a Cloud API só aceita marcar leitura de uma mensagem inbound).
 async function getLastInboundExternalMessageId(messagingSessionId: string): Promise<string | null> {
@@ -99,7 +111,13 @@ export const ticketService = {
   async getById(ticketId: string, userId: string) {
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
-      include: { queue: true, target: true, messagingSession: true, messages: { orderBy: { createdAt: "asc" } } },
+      include: {
+        queue: true,
+        target: true,
+        messagingSession: true,
+        messages: { orderBy: { createdAt: "asc" } },
+        closeTag: true,
+      },
     });
     if (!ticket) throw new NotFoundError("Ticket não encontrado.");
     if (ticket.assignedUserId !== userId) throw new ForbiddenError("Você não é o atendente responsável por este ticket.");
@@ -111,7 +129,42 @@ export const ticketService = {
       .sort({ createdAt: 1 })
       .toArray();
 
-    return { ...ticket, history };
+    return { ...withDurations(ticket), history };
+  },
+
+  /// Tickets encerrados que este atendente atendeu (assignedUserId permanece
+  /// setado após o encerramento) — usado na tela de Histórico do Desk.
+  async listClosed(
+    userId: string,
+    options: { phone?: string; ticketNumber?: number; date?: string; page: number; pageSize: number },
+  ) {
+    const where: Prisma.TicketWhereInput = {
+      assignedUserId: userId,
+      status: "CLOSED",
+      ...(options.ticketNumber ? { ticketNumber: options.ticketNumber } : {}),
+      ...(options.phone ? { target: { waId: { contains: options.phone } } } : {}),
+      ...(options.date
+        ? {
+            closedAt: {
+              gte: new Date(`${options.date}T00:00:00.000`),
+              lt: new Date(`${options.date}T23:59:59.999`),
+            },
+          }
+        : {}),
+    };
+
+    const [rows, total] = await Promise.all([
+      prisma.ticket.findMany({
+        where,
+        include: { queue: true, target: true, closeTag: true },
+        orderBy: { createdAt: "desc" },
+        skip: (options.page - 1) * options.pageSize,
+        take: options.pageSize,
+      }),
+      prisma.ticket.count({ where }),
+    ]);
+
+    return { items: rows.map(withDurations), total, page: options.page, pageSize: options.pageSize };
   },
 
   async sendMessage(

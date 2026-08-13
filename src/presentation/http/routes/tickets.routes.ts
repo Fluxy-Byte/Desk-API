@@ -18,13 +18,26 @@ const closeTicketSchema = z.object({
   closeTagId: z.string().trim().min(1).optional(),
 });
 
+const listClosedQuerySchema = z.object({
+  phone: z.string().trim().min(1).optional(),
+  ticketNumber: z.coerce.number().int().positive().optional(),
+  date: z.string().trim().min(1).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(10),
+});
+
 ticketsRouter.get(
   "/",
   routeHandler(async (req) => {
     const status = req.query.status;
     if (status === "waiting") return ticketService.listWaiting(req.auth!.userId);
     if (status === "mine") return ticketService.listMine(req.auth!.userId);
-    throw new ValidationError("Parâmetro status deve ser 'waiting' ou 'mine'.");
+    if (status === "closed") {
+      const parsed = listClosedQuerySchema.safeParse(req.query);
+      if (!parsed.success) throw new ValidationError("Parâmetros inválidos.");
+      return ticketService.listClosed(req.auth!.userId, parsed.data);
+    }
+    throw new ValidationError("Parâmetro status deve ser 'waiting', 'mine' ou 'closed'.");
   }),
 );
 

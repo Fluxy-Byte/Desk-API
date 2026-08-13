@@ -9,13 +9,19 @@ import { routeHandler } from "../middlewares/route-handler";
 export const dispatchRouter = Router();
 dispatchRouter.use(requireAuth);
 
+const templateParameterSchema = z.object({ type: z.string(), text: z.string() });
+
 const dispatchSchema = z.object({
   queueId: z.string().trim().min(1),
   templateName: z.string().trim().min(1),
+  templateHeaderText: z.string().optional(),
+  templateBodyText: z.string().optional(),
   contact: z.object({
     phone: z.string().trim().min(8),
     name: z.string().trim().optional(),
     email: z.string().trim().email().optional(),
+    parametersHeader: z.array(templateParameterSchema).optional(),
+    parametersBody: z.array(templateParameterSchema).optional(),
   }),
 });
 
@@ -53,11 +59,15 @@ dispatchRouter.post(
       idAttendant: userId,
       createdByName: user?.name,
       skipTransferMessage: true,
+      templateHeaderText: parsed.data.templateHeaderText,
+      templateBodyText: parsed.data.templateBodyText,
       contacts: [
         {
           numberContact: parsed.data.contact.phone,
           nameContact: parsed.data.contact.name,
           emailContact: parsed.data.contact.email,
+          parametersHeader: parsed.data.contact.parametersHeader,
+          parametersBody: parsed.data.contact.parametersBody,
         },
       ],
     });

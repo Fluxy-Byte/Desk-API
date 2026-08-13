@@ -25,6 +25,24 @@ interface MetaErrorResponse {
   error?: { message?: string };
 }
 
+/// Conta quantas variáveis {{1}}, {{2}}... existem em um texto de componente —
+/// usado pra saber quantos campos de preenchimento mostrar por contato no
+/// disparo ativo pelo Desk. Mesma função de Agent-Api/meta-graph-client.ts.
+function countVariables(text?: string): number {
+  if (!text) return 0;
+  const matches = text.match(/\{\{\d+\}\}/g);
+  return matches ? new Set(matches).size : 0;
+}
+
+export function getTemplateVariableCount(components: MetaTemplateComponent[]): { header: number; body: number } {
+  const header = components.find((c) => c.type === "HEADER");
+  const body = components.find((c) => c.type === "BODY");
+  return {
+    header: countVariables(header?.text),
+    body: countVariables(body?.text),
+  };
+}
+
 /// Lista os templates de mensagem cadastrados no WABA — mesma chamada usada
 /// em Agent-Api/Campaign-Worker/Fluxy-Agents-Api, duplicada aqui porque cada
 /// serviço do monorepo tem sua própria cópia do client da Meta.

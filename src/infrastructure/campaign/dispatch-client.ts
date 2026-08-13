@@ -5,6 +5,8 @@ export interface DispatchCampaignContact {
   numberContact: string;
   nameContact?: string;
   emailContact?: string;
+  parametersHeader?: { type: string; text: string }[];
+  parametersBody?: { type: string; text: string }[];
 }
 
 export interface DispatchCampaignPayload {
@@ -16,6 +18,8 @@ export interface DispatchCampaignPayload {
   idAttendant: string;
   createdByName?: string;
   skipTransferMessage?: boolean;
+  templateHeaderText?: string;
+  templateBodyText?: string;
   contacts: DispatchCampaignContact[];
 }
 
