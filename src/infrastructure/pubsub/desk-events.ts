@@ -1,11 +1,15 @@
 import { redis } from "../cache/redis/client";
 
-export type DeskEventType = "ticket_new" | "ticket_message" | "ticket_updated";
+export type DeskEventType = "ticket_new" | "ticket_message" | "ticket_updated" | "attendant_status_changed";
 
 interface DeskEvent {
   type: DeskEventType;
   queueId?: string;
   ticketId?: string;
+  /// Só usado por attendant_status_changed — repassado direto pra esse
+  /// usuário (útil pra sincronizar múltiplas abas do mesmo atendente), sem
+  /// passar pela resolução de ticket/fila do subscriber.
+  userId?: string;
   payload: unknown;
 }
 

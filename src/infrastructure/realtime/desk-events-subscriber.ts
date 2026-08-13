@@ -5,10 +5,11 @@ import { sendToUser } from "./ws-server";
 const DESK_EVENTS_CHANNEL = "desk:events";
 
 interface DeskEvent {
-  type: "ticket_new" | "ticket_message" | "ticket_updated" | "message_status";
+  type: "ticket_new" | "ticket_message" | "ticket_updated" | "message_status" | "attendant_status_changed";
   queueId?: string;
   ticketId?: string;
   messagingSessionId?: string;
+  userId?: string;
   payload: unknown;
 }
 
@@ -36,6 +37,11 @@ export function startDeskEventsSubscriber(): void {
     void (async () => {
       try {
         const event = JSON.parse(raw) as DeskEvent;
+
+        if (event.type === "attendant_status_changed") {
+          if (event.userId) sendToUser(event.userId, event);
+          return;
+        }
 
         let ticket: { id: string; assignedUserId: string | null; queueId: string } | null = null;
 

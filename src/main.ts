@@ -10,10 +10,12 @@ import { startWsServer } from "./infrastructure/realtime/ws-server";
 import { getRabbitChannel } from "./infrastructure/queue/rabbitmq/connection";
 import { ensurePublicMediaBucketPolicy } from "./infrastructure/storage/s3-client";
 import { authRouter } from "./presentation/http/routes/auth.routes";
+import { dispatchRouter } from "./presentation/http/routes/dispatch.routes";
 import { queuesRouter } from "./presentation/http/routes/queues.routes";
 import { targetsRouter } from "./presentation/http/routes/targets.routes";
 import { ticketsRouter } from "./presentation/http/routes/tickets.routes";
 import { uploadsRouter } from "./presentation/http/routes/uploads.routes";
+import { whatsappChannelsRouter } from "./presentation/http/routes/whatsapp-channels.routes";
 
 async function main() {
   await prisma.$connect();
@@ -30,10 +32,12 @@ async function main() {
   app.use(express.json());
 
   app.use("/", authRouter);
+  app.use("/", dispatchRouter);
   app.use("/queues", queuesRouter);
   app.use("/tickets", ticketsRouter);
   app.use("/targets", targetsRouter);
   app.use("/uploads", uploadsRouter);
+  app.use("/whatsapp-channels", whatsappChannelsRouter);
 
   app.get("/health", async (_req, res) => {
     const [dbOk, redisOk, mongoOk] = await Promise.all([

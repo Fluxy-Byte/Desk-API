@@ -1,8 +1,10 @@
 import { Router } from "express";
+import { z } from "zod";
 import { env } from "../../../config/env";
 import { requestPasswordReset, resetPassword, verifyCredentials } from "../../../infrastructure/auth/agent-api-client";
 import { signRealtimeToken, signSessionToken } from "../../../infrastructure/auth/jwt";
 import { prisma } from "../../../infrastructure/database/prisma/client";
+import { publishDeskEvent } from "../../../infrastructure/pubsub/desk-events";
 import { requireAuth, type AuthedRequest } from "../middlewares/require-auth";
 
 export const authRouter = Router();
@@ -91,16 +93,43 @@ authRouter.post("/auth/login", async (req, res) => {
 authRouter.get("/me", requireAuth, async (req: AuthedRequest, res) => {
   const { userId, companyId } = req.auth!;
 
-  const [user, queueMemberships] = await Promise.all([
+  const [user, queueMemberships, member] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true } }),
     prisma.queueMember.findMany({ where: { userId }, select: { queueId: true } }),
+    prisma.member.findUnique({ where: { organizationId_userId: { organizationId: companyId, userId } }, select: { status: true } }),
   ]);
 
   res.json({
     success: true,
-    result: { user, companyId, queueIds: queueMemberships.map((m) => m.queueId) },
+    result: { user, companyId, queueIds: queueMemberships.map((m) => m.queueId), status: member?.status ?? "OFFLINE" },
     message: null,
   });
+});
+
+const updateStatusSchema = z.object({ status: z.enum(["ONLINE", "PAUSED"]) });
+
+/// Único jeito manual de mudar status — OFFLINE é sempre automático (ver
+/// infrastructure/realtime/ws-server.ts), nunca aceito aqui.
+authRouter.post("/me/status", requireAuth, async (req: AuthedRequest, res) => {
+  const parsed = updateStatusSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(422).json({ success: false, result: null, message: "Status inválido." });
+    return;
+  }
+
+  const { userId, companyId } = req.auth!;
+  const member = await prisma.member.update({
+    where: { organizationId_userId: { organizationId: companyId, userId } },
+    data: { status: parsed.data.status, statusUpdatedAt: new Date() },
+  });
+
+  await publishDeskEvent({
+    type: "attendant_status_changed",
+    userId,
+    payload: { userId, status: member.status },
+  });
+
+  res.json({ success: true, result: { status: member.status }, message: null });
 });
 
 authRouter.get("/realtime-token", requireAuth, async (req: AuthedRequest, res) => {

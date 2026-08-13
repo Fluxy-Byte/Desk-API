@@ -32,3 +32,9 @@ export class ValidationError extends AppError {
     super(message, 422);
   }
 }
+
+export class UpstreamError extends AppError {
+  constructor(message = "Falha ao consultar um serviço externo.") {
+    super(message, 502);
+  }
+}

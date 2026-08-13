@@ -9,6 +9,7 @@ const envSchema = z.object({
 
   INTERNAL_API_KEY: z.string().min(1),
   AGENT_API_BASE_URL: z.string().min(1),
+  META_GRAPH_API_VERSION: z.string().default("v21.0"),
 
   // Tokens próprios do Desk-API — distintos do Better Auth do Agent-Api.
   // DESK_JWT_SECRET assina a sessão do atendente (~8h); DESK_REALTIME_JWT_SECRET

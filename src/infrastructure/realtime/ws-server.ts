@@ -1,6 +1,8 @@
 import type { Server } from "http";
 import { WebSocket, WebSocketServer } from "ws";
 import { verifyRealtimeToken } from "../auth/jwt";
+import { prisma } from "../database/prisma/client";
+import { publishDeskEvent } from "../pubsub/desk-events";
 
 interface ConnectionMeta {
   userId: string;
@@ -31,6 +33,29 @@ export function sendToUser(userId: string, payload: unknown): void {
   }
 }
 
+/// ONLINE/OFFLINE são sempre automáticos, amarrados a ter (ou não) pelo menos
+/// uma conexão WebSocket aberta — nunca mexe no status se já for o que
+/// estamos tentando setar (evita update+publish à toa a cada nova aba).
+async function setAutomaticStatus(
+  organizationId: string,
+  userId: string,
+  status: "ONLINE" | "OFFLINE",
+): Promise<void> {
+  const member = await prisma.member.findUnique({ where: { organizationId_userId: { organizationId, userId } } });
+  if (!member || member.status === status) return;
+
+  await prisma.member.update({
+    where: { id: member.id },
+    data: { status, statusUpdatedAt: new Date() },
+  });
+
+  await publishDeskEvent({
+    type: "attendant_status_changed",
+    userId,
+    payload: { userId, status },
+  });
+}
+
 /// Handshake: o token vem por query string (?token=...) porque o WebSocket do
 /// browser não permite header Authorization customizado — por isso é um token
 /// à parte, curto (30s), nunca a sessão de 8h inteira.
@@ -52,8 +77,14 @@ export function startWsServer(server: Server): WebSocketServer {
       const payload = verifyRealtimeToken(token);
       wss.handleUpgrade(req, socket, head, (ws) => {
         const meta: ConnectionMeta = { userId: payload.sub, companyId: payload.companyId };
+        const isFirstConnection = !connectionsByUser.get(meta.userId)?.size;
         metaByConnection.set(ws, meta);
         addConnection(meta.userId, ws);
+        if (isFirstConnection) {
+          setAutomaticStatus(meta.companyId, meta.userId, "ONLINE").catch((err) =>
+            console.error("Falha ao marcar atendente como online:", err),
+          );
+        }
         wss.emit("connection", ws, req);
       });
     } catch {
@@ -80,7 +111,14 @@ export function startWsServer(server: Server): WebSocketServer {
 
     ws.on("close", () => {
       clearInterval(heartbeat);
-      if (meta) removeConnection(meta.userId, ws);
+      if (meta) {
+        removeConnection(meta.userId, ws);
+        if (!connectionsByUser.get(meta.userId)?.size) {
+          setAutomaticStatus(meta.companyId, meta.userId, "OFFLINE").catch((err) =>
+            console.error("Falha ao marcar atendente como offline:", err),
+          );
+        }
+      }
     });
 
     ws.send(JSON.stringify({ type: "connected" }));

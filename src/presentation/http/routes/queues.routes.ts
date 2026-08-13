@@ -11,7 +11,14 @@ queuesRouter.get(
   routeHandler(async (req) => {
     const memberships = await prisma.queueMember.findMany({
       where: { userId: req.auth!.userId },
-      include: { queue: { include: { members: { include: { user: true } } } } },
+      include: {
+        queue: {
+          include: {
+            members: { include: { user: true } },
+            serviceIsland: { select: { id: true, allowActiveDispatch: true, whatsappChannelId: true } },
+          },
+        },
+      },
     });
     return memberships.map((m) => m.queue);
   }),
