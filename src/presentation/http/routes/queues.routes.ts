@@ -10,7 +10,7 @@ queuesRouter.get(
   "/",
   routeHandler(async (req) => {
     const memberships = await prisma.queueMember.findMany({
-      where: { userId: req.auth!.userId },
+      where: { userId: req.auth!.userId, queue: { deletedAt: null } },
       include: {
         queue: {
           include: {

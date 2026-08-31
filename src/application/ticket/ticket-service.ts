@@ -308,7 +308,7 @@ export const ticketService = {
     if (!ticket) throw new NotFoundError("Ticket não encontrado.");
     if (ticket.assignedUserId !== userId) throw new ForbiddenError("Você não é o atendente responsável por este ticket.");
 
-    const newQueue = await prisma.queue.findUnique({ where: { id: newQueueId } });
+    const newQueue = await prisma.queue.findFirst({ where: { id: newQueueId, deletedAt: null } });
     if (!newQueue) throw new ValidationError("Fila de destino inválida.");
 
     const newTicket = await transferTicket(ticket, {

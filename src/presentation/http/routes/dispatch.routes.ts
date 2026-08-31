@@ -40,7 +40,7 @@ dispatchRouter.post(
     if (!membership) throw new ForbiddenError("Você não pertence a esta fila.");
 
     const queue = await prisma.queue.findFirst({
-      where: { id: parsed.data.queueId },
+      where: { id: parsed.data.queueId, deletedAt: null },
       include: { serviceIsland: { include: { whatsappChannel: true } } },
     });
     if (!queue) throw new NotFoundError("Fila não encontrada.");
