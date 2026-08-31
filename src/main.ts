@@ -17,8 +17,28 @@ import { ticketsRouter } from "./presentation/http/routes/tickets.routes";
 import { uploadsRouter } from "./presentation/http/routes/uploads.routes";
 import { whatsappChannelsRouter } from "./presentation/http/routes/whatsapp-channels.routes";
 
+/// Presença (Member.status) só existe em memória enquanto o processo está de
+/// pé — connectionsByUser (ws-server.ts) nasce vazio a cada boot. Se o
+/// processo cair/reiniciar (deploy, crash, OOM) com atendentes conectados, o
+/// evento de close do WebSocket deles nunca roda, e o banco fica com ONLINE
+/// preso pra sempre (nenhum mecanismo detecta isso depois, já que o
+/// heartbeat também é só em memória). Corrigido zerando toda presença ONLINE
+/// no boot: nesse ponto ainda não existe nenhuma conexão WebSocket real, já
+/// que startWsServer só é chamado depois — qualquer ONLINE aqui é lixo de
+/// uma execução anterior.
+async function reconcileStaleOnlineStatus(): Promise<void> {
+  const { count } = await prisma.member.updateMany({
+    where: { status: "ONLINE" },
+    data: { status: "OFFLINE", statusUpdatedAt: new Date() },
+  });
+  if (count > 0) {
+    console.log(`Desk-API boot: ${count} atendente(s) com presença ONLINE zerada (processo reiniciou).`);
+  }
+}
+
 async function main() {
   await prisma.$connect();
+  await reconcileStaleOnlineStatus();
   await getRabbitChannel();
   await ensurePublicMediaBucketPolicy();
 
