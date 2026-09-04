@@ -9,6 +9,12 @@ interface DeskEvent {
   queueId?: string;
   ticketId?: string;
   messagingSessionId?: string;
+  /// Entrega direta pra esse usuário, além do roteamento normal por
+  /// atendente/fila responsável do ticket resolvido. Usado por
+  /// attendant_status_changed (só isso) e pelas transferências — o ticket
+  /// novo criado na transferência já não tem esse atendente como responsável
+  /// nem necessariamente está na fila dele, então sem isso ele nunca saberia
+  /// que o ticket antigo saiu da lista "meus tickets" dele.
   userId?: string;
   payload: unknown;
 }
@@ -59,6 +65,12 @@ export function startDeskEventsSubscriber(): void {
         }
 
         const outgoing = ticket ? { ...event, ticketId: ticket.id } : event;
+
+        // Entrega direta opcional (ex: atendente antigo numa transferência) —
+        // além do roteamento normal, nunca no lugar dele.
+        if (event.userId && event.userId !== ticket?.assignedUserId) {
+          sendToUser(event.userId, outgoing);
+        }
 
         if (ticket?.assignedUserId) {
           sendToUser(ticket.assignedUserId, outgoing);

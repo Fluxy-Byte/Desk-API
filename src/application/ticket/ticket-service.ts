@@ -319,7 +319,16 @@ export const ticketService = {
       closeReason: "TRANSFERRED_QUEUE",
     });
 
-    await publishDeskEvent({ type: "ticket_new", queueId: newQueueId, ticketId: newTicket.id, payload: newTicket });
+    // userId aqui é quem transferiu — o ticket novo fica sem responsável e
+    // na fila de destino, então sem isso quem transferiu nunca é avisado
+    // pra tirar o ticket antigo (já fechado) da própria lista.
+    await publishDeskEvent({
+      type: "ticket_new",
+      queueId: newQueueId,
+      ticketId: newTicket.id,
+      userId,
+      payload: newTicket,
+    });
     return newTicket;
   },
 
@@ -342,8 +351,16 @@ export const ticketService = {
     });
 
     // Notifica o novo responsável (a sala aparece na lista "meus tickets" dele)
-    // e a fila antiga (pra sumir da visão de quem não é mais responsável).
-    await publishDeskEvent({ type: "ticket_updated", queueId: ticket.queueId, ticketId: newTicket.id, payload: newTicket });
+    // e diretamente quem transferiu (userId) — o ticket antigo já foi fechado
+    // e o novo tem outro responsável, então sem o userId explícito quem
+    // transferiu nunca recebe esse evento pra atualizar a própria lista.
+    await publishDeskEvent({
+      type: "ticket_updated",
+      queueId: ticket.queueId,
+      ticketId: newTicket.id,
+      userId,
+      payload: newTicket,
+    });
     return newTicket;
   },
 
