@@ -164,10 +164,18 @@ export const ticketService = {
     if (!ticket) throw new NotFoundError("Ticket não encontrado.");
     if (ticket.assignedUserId !== userId) throw new ForbiddenError("Você não é o atendente responsável por este ticket.");
 
+    // A mensagem no Mongo não guarda ticketId (só messagingSessionId, que
+    // pode ter mais de um ticket ao longo do tempo — reabertura, etc.), então
+    // o recorte pro ticket certo é pela janela [createdAt, closedAt ?? agora]
+    // — sem isso, um ticket reaberto na mesma sessão trazia mensagens de
+    // outro ticket junto.
     const db = await getMongoDb();
     const history = await db
       .collection<MessageDocument>(MESSAGES_COLLECTION)
-      .find({ messagingSessionId: ticket.messagingSessionId })
+      .find({
+        messagingSessionId: ticket.messagingSessionId,
+        createdAt: { $gte: ticket.createdAt, ...(ticket.closedAt ? { $lte: ticket.closedAt } : {}) },
+      })
       .sort({ createdAt: 1 })
       .toArray();
 
