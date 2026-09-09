@@ -49,6 +49,36 @@ async function getLastInboundExternalMessageId(messagingSessionId: string): Prom
   return docs[0]?.externalMessageId ?? null;
 }
 
+// Texto amigável pra prévia na lista de tickets quando a mensagem não tem
+// texto (mídia pura) — mesma ideia do "Mídia indisponível" do Desk-Console,
+// só que com o tipo certo pra dar contexto na prévia.
+function lastMessagePreview(doc: MessageDocument): string {
+  if (doc.text) return doc.text;
+  if (doc.messageType === "IMAGE") return "📷 Imagem";
+  if (doc.messageType === "AUDIO") return "🎤 Áudio";
+  if (doc.messageType === "DOCUMENT") return "📄 Documento";
+  if (doc.messageType === "STICKER") return "Figurinha";
+  return "";
+}
+
+/// Última mensagem de cada sessão, numa aggregation só (evita 1 query por
+/// ticket) — usado pra prévia na lista "Meus tickets".
+async function getLastMessageBySession(messagingSessionIds: string[]): Promise<Map<string, MessageDocument>> {
+  if (messagingSessionIds.length === 0) return new Map();
+
+  const db = await getMongoDb();
+  const results = await db
+    .collection<MessageDocument>(MESSAGES_COLLECTION)
+    .aggregate<{ _id: string; doc: MessageDocument }>([
+      { $match: { messagingSessionId: { $in: messagingSessionIds } } },
+      { $sort: { createdAt: -1 } },
+      { $group: { _id: "$messagingSessionId", doc: { $first: "$$ROOT" } } },
+    ])
+    .toArray();
+
+  return new Map(results.map((r) => [r._id, r.doc]));
+}
+
 async function notifyReadReceipt(ticketId: string, userId: string, typingIndicator: boolean) {
   const ticket = await prisma.ticket.findUnique({
     where: { id: ticketId },
@@ -83,10 +113,22 @@ export const ticketService = {
   },
 
   async listMine(userId: string) {
-    return prisma.ticket.findMany({
+    const tickets = await prisma.ticket.findMany({
       where: { assignedUserId: userId, status: "IN_PROGRESS" },
       include: { queue: true, target: true },
       orderBy: { updatedAt: "desc" },
+    });
+    if (tickets.length === 0) return [];
+
+    const lastMessageBySession = await getLastMessageBySession(tickets.map((t) => t.messagingSessionId));
+
+    return tickets.map((ticket) => {
+      const lastMessage = lastMessageBySession.get(ticket.messagingSessionId);
+      return {
+        ...ticket,
+        lastMessageText: lastMessage ? lastMessagePreview(lastMessage) : null,
+        lastMessageAt: lastMessage?.createdAt ?? null,
+      };
     });
   },
 
