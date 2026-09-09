@@ -164,22 +164,27 @@ export const ticketService = {
     if (!ticket) throw new NotFoundError("Ticket não encontrado.");
     if (ticket.assignedUserId !== userId) throw new ForbiddenError("Você não é o atendente responsável por este ticket.");
 
-    // A mensagem no Mongo não guarda ticketId (só messagingSessionId, que
-    // pode ter mais de um ticket ao longo do tempo — reabertura, etc.), então
-    // o recorte pro ticket certo é pela janela [createdAt, closedAt ?? agora]
-    // — sem isso, um ticket reaberto na mesma sessão trazia mensagens de
-    // outro ticket junto.
-    const db = await getMongoDb();
+    // O atendente precisa ver a conversa inteira da sessão (não só a fatia
+    // deste ticket) pra ter contexto do que já foi falado antes — inclusive
+    // em atendimentos anteriores na mesma sessão (reabertura, etc.). Os
+    // marcadores de abertura/encerramento de cada ticket (relatedTickets)
+    // deixam claro pro atendente onde um atendimento terminou e o outro
+    // começou dentro dessa conversa contínua.
+    const [db, relatedTickets] = await Promise.all([
+      getMongoDb(),
+      prisma.ticket.findMany({
+        where: { messagingSessionId: ticket.messagingSessionId },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, ticketNumber: true, createdAt: true, closedAt: true },
+      }),
+    ]);
     const history = await db
       .collection<MessageDocument>(MESSAGES_COLLECTION)
-      .find({
-        messagingSessionId: ticket.messagingSessionId,
-        createdAt: { $gte: ticket.createdAt, ...(ticket.closedAt ? { $lte: ticket.closedAt } : {}) },
-      })
+      .find({ messagingSessionId: ticket.messagingSessionId })
       .sort({ createdAt: 1 })
       .toArray();
 
-    return { ...withDurations(ticket), history };
+    return { ...withDurations(ticket), history, relatedTickets };
   },
 
   /// Tickets encerrados que este atendente atendeu (assignedUserId permanece
