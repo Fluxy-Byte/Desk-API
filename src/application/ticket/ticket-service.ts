@@ -341,8 +341,10 @@ export const ticketService = {
     // preso em HUMAN pra sempre (mesmo padrão comprovado do sistema anterior).
     await prisma.target.update({ where: { id: ticket.targetId }, data: { status: "AI" } });
 
+    // Canal pode não ter agente vinculado (openAgent=false desde a origem) —
+    // sem agente não existe closingMessage configurada, então não envia nada.
     const agent = ticket.target.whatsappChannel.agent;
-    if (agent.closingEnabled && agent.closingMessage) {
+    if (agent && agent.closingEnabled && agent.closingMessage) {
       const channel = await getRabbitChannel();
       await publishOutboundMessage(channel, {
         target: ticket.target,
