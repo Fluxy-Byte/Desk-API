@@ -80,6 +80,11 @@ ticketsRouter.get(
   routeHandler(async (req) => ticketService.getCloseTags(String(req.params.id), req.auth!.userId)),
 );
 
+ticketsRouter.get(
+  "/:id/pre-configured-messages",
+  routeHandler(async (req) => ticketService.getPreConfiguredMessages(String(req.params.id), req.auth!.userId)),
+);
+
 ticketsRouter.post(
   "/:id/close",
   routeHandler(async (req) => {

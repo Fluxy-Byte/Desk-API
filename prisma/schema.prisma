@@ -143,8 +143,9 @@ model ServiceIsland {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  queues    Queue[]
-  closeTags TicketCloseTag[]
+  queues                Queue[]
+  closeTags             TicketCloseTag[]
+  preConfiguredMessages PreConfiguredMessage[]
 
   @@index([organizationId])
 }
@@ -159,6 +160,25 @@ model TicketCloseTag {
   updatedAt DateTime @updatedAt
 
   tickets Ticket[]
+
+  @@unique([serviceIslandId, name])
+  @@index([serviceIslandId])
+}
+
+/// Mensagem pronta gerida no Agent Console e usada pelo atendente no Desk
+/// Console como atalho ao responder um ticket. Ver Agent-Api/prisma/schema.prisma
+/// (schema canônico) pro comentário completo, inclusive sobre **negrito**.
+model PreConfiguredMessage {
+  id              String        @id @default(cuid())
+  serviceIslandId String
+  serviceIsland   ServiceIsland @relation(fields: [serviceIslandId], references: [id], onDelete: Cascade)
+  name            String
+  content         String
+
+  queues Queue[] @relation("PreConfiguredMessageQueues")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([serviceIslandId, name])
   @@index([serviceIslandId])
@@ -183,9 +203,10 @@ model Queue {
   /// comentário completo. null = fila ativa normalmente.
   deletedAt DateTime?
 
-  members          QueueMember[]
-  tickets          Ticket[]
-  defaultForAgents Agent[]
+  members               QueueMember[]
+  tickets               Ticket[]
+  defaultForAgents      Agent[]
+  preConfiguredMessages PreConfiguredMessage[] @relation("PreConfiguredMessageQueues")
 
   @@index([serviceIslandId])
 }

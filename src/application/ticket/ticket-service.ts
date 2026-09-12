@@ -310,6 +310,20 @@ export const ticketService = {
     };
   },
 
+  /// Consultado ao abrir o seletor de mensagem rápida no Desk-Console —
+  /// resolve ticket → fila pra listar só as mensagens vinculadas àquela fila
+  /// (não é por ilha inteira, diferente das tags de fechamento).
+  async getPreConfiguredMessages(ticketId: string, userId: string) {
+    const ticket = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: { queue: { include: { preConfiguredMessages: { orderBy: { createdAt: "asc" } } } } },
+    });
+    if (!ticket) throw new NotFoundError("Ticket não encontrado.");
+    if (ticket.assignedUserId !== userId) throw new ForbiddenError("Você não é o atendente responsável por este ticket.");
+
+    return ticket.queue.preConfiguredMessages.map((m) => ({ id: m.id, name: m.name, content: m.content }));
+  },
+
   async close(ticketId: string, userId: string, closeTagId?: string) {
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
