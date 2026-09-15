@@ -122,19 +122,20 @@ model Channel {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  serviceIsland ServiceIsland?
-  targets       Target[]
+  serviceIsland        ServiceIsland?
+  targets              Target[]
+  targetBlockCampaigns TargetBlockCampaign[]
 
   @@index([organizationId])
   @@index([agentId])
 }
 
 model ServiceIsland {
-  id                String          @id @default(cuid())
+  id                String       @id @default(cuid())
   organizationId    String
-  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  whatsappChannelId String          @unique
-  whatsappChannel   Channel @relation(fields: [whatsappChannelId], references: [id], onDelete: Cascade)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappChannelId String       @unique
+  whatsappChannel   Channel      @relation(fields: [whatsappChannelId], references: [id], onDelete: Cascade)
   name              String
 
   requireCloseTag     Boolean @default(false)
@@ -230,11 +231,11 @@ enum TargetStatus {
 }
 
 model Target {
-  id                String          @id @default(cuid())
+  id                String       @id @default(cuid())
   organizationId    String
-  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   whatsappChannelId String
-  whatsappChannel   Channel @relation(fields: [whatsappChannelId], references: [id], onDelete: Cascade)
+  whatsappChannel   Channel      @relation(fields: [whatsappChannelId], references: [id], onDelete: Cascade)
 
   /// Business-Scoped User ID (contacts[].user_id) — vínculo principal do
   /// contato, sempre presente desde abr/2026.
@@ -258,12 +259,31 @@ model Target {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  messagingSessions MessagingSession[]
-  tickets           Ticket[]
+  messagingSessions    MessagingSession[]
+  tickets              Ticket[]
+  targetBlockCampaigns TargetBlockCampaign[]
 
   @@unique([organizationId, whatsappChannelId, bsuid])
   @@unique([organizationId, whatsappChannelId, waId])
   @@index([organizationId])
+  @@index([whatsappChannelId])
+}
+
+/// Bloqueio automático de um contato para campanhas de um canal específico —
+/// ver Agent-Api/prisma/schema.prisma (schema canônico) pro comentário
+/// completo. Este serviço só lê (checagem antes de um disparo ativo pelo
+/// Desk, ver dispatch.routes.ts).
+model TargetBlockCampaign {
+  id                String  @id @default(cuid())
+  targetId          String
+  target            Target  @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  whatsappChannelId String
+  whatsappChannel   Channel @relation(fields: [whatsappChannelId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([targetId, whatsappChannelId])
   @@index([whatsappChannelId])
 }
 

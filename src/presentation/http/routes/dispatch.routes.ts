@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { normalizeBrazilianWaId } from "../../../domain/utils/phone";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../../domain/errors/app-error";
 import { dispatchCampaign } from "../../../infrastructure/campaign/dispatch-client";
 import { prisma } from "../../../infrastructure/database/prisma/client";
@@ -10,6 +11,58 @@ export const dispatchRouter = Router();
 dispatchRouter.use(requireAuth);
 
 const templateParameterSchema = z.object({ type: z.string(), text: z.string() });
+
+const checkBlockedSchema = z.object({
+  queueId: z.string().trim().min(1),
+  phone: z.string().trim().min(8),
+});
+
+/// Checagem prévia (chamada pelo front ANTES de montar o disparo) — o
+/// contato pode ter um TargetBlockCampaign no canal desta fila (ver
+/// Agent-Api/prisma/schema.prisma, TargetBlockCampaign, e
+/// Inbound-Service/campaign-response-service.ts, quem cria essas linhas).
+/// Disparo ativo do Desk é sempre 1 contato só, então não existe "remover da
+/// lista e continuar" — se bloqueado, o front só pode cancelar.
+dispatchRouter.post(
+  "/dispatch/check-blocked",
+  routeHandler(async (req) => {
+    const parsed = checkBlockedSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError("Dados inválidos.");
+
+    const { userId, companyId } = req.auth!;
+
+    const membership = await prisma.queueMember.findFirst({ where: { queueId: parsed.data.queueId, userId } });
+    if (!membership) throw new ForbiddenError("Você não pertence a esta fila.");
+
+    const queue = await prisma.queue.findFirst({
+      where: { id: parsed.data.queueId, deletedAt: null },
+      include: { serviceIsland: { include: { whatsappChannel: true } } },
+    });
+    if (!queue) throw new NotFoundError("Fila não encontrada.");
+
+    const waId = normalizeBrazilianWaId(parsed.data.phone);
+    const target = await prisma.target.findUnique({
+      where: {
+        organizationId_whatsappChannelId_waId: {
+          organizationId: companyId,
+          whatsappChannelId: queue.serviceIsland.whatsappChannel.id,
+          waId,
+        },
+      },
+      select: { id: true },
+    });
+    if (!target) return { blocked: false };
+
+    const block = await prisma.targetBlockCampaign.findUnique({
+      where: {
+        targetId_whatsappChannelId: { targetId: target.id, whatsappChannelId: queue.serviceIsland.whatsappChannel.id },
+      },
+      select: { id: true },
+    });
+
+    return { blocked: block !== null };
+  }),
+);
 
 const dispatchSchema = z.object({
   queueId: z.string().trim().min(1),
