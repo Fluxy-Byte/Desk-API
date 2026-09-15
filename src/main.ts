@@ -57,7 +57,7 @@ async function main() {
   app.use("/tickets", ticketsRouter);
   app.use("/targets", targetsRouter);
   app.use("/uploads", uploadsRouter);
-  app.use("/whatsapp-channels", whatsappChannelsRouter);
+  app.use("/channels", whatsappChannelsRouter);
 
   app.get("/health", async (_req, res) => {
     const [dbOk, redisOk, mongoOk] = await Promise.all([

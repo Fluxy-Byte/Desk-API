@@ -7,7 +7,7 @@ export const QUEUE_OUTBOUND_MESSAGE_MARK_READ = "outbound.message.mark-read";
 
 interface OutboundMessagePayload {
   target: unknown;
-  whatsappChannel: unknown;
+  channel: unknown;
   messagingSession: unknown;
   answer: { text: string; audio: string; image: string };
   finishesProcessing: boolean;

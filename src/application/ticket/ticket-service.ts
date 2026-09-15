@@ -362,7 +362,7 @@ export const ticketService = {
       const channel = await getRabbitChannel();
       await publishOutboundMessage(channel, {
         target: ticket.target,
-        whatsappChannel: ticket.target.whatsappChannel,
+        channel: ticket.target.whatsappChannel,
         messagingSession: ticket.messagingSession,
         answer: { text: agent.closingMessage, audio: "", image: "" },
         finishesProcessing: true,

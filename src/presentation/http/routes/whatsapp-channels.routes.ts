@@ -16,7 +16,7 @@ whatsappChannelsRouter.use(requireAuth);
 whatsappChannelsRouter.get(
   "/:id/templates",
   routeHandler(async (req) => {
-    const channel = await prisma.whatsappChannel.findFirst({
+    const channel = await prisma.channel.findFirst({
       where: { id: String(req.params.id), organizationId: req.auth!.companyId },
     });
     if (!channel) throw new NotFoundError("WhatsApp Channel não encontrado.");
