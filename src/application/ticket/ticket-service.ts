@@ -92,6 +92,7 @@ async function notifyReadReceipt(ticketId: string, userId: string, typingIndicat
 
   const channel = await getRabbitChannel();
   await publishMarkRead(channel, {
+    whatsappChannelId: ticket.target.whatsappChannel.id,
     phoneNumberId: ticket.target.whatsappChannel.phoneNumberId,
     externalMessageId,
     typingIndicator,
