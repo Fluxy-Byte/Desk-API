@@ -10,7 +10,7 @@ ticketsRouter.use(requireAuth);
 
 const sendMessageSchema = z.object({
   text: z.string(),
-  messageType: z.enum(["TEXT", "AUDIO", "IMAGE", "DOCUMENT", "STICKER"]).optional(),
+  messageType: z.enum(["TEXT", "AUDIO", "IMAGE", "DOCUMENT", "STICKER", "VIDEO"]).optional(),
   mediaUrl: z.string().optional(),
 });
 

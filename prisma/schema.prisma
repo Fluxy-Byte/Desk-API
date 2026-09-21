@@ -140,6 +140,7 @@ model ServiceIsland {
 
   requireCloseTag     Boolean @default(false)
   allowActiveDispatch Boolean @default(false)
+  allowAudioMessages  Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -387,6 +388,7 @@ enum MessageType {
   IMAGE
   DOCUMENT
   STICKER
+  VIDEO
 }
 
 model TicketMessage {

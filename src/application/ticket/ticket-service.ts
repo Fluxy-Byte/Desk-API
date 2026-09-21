@@ -57,6 +57,7 @@ function lastMessagePreview(doc: MessageDocument): string {
   if (doc.messageType === "IMAGE") return "📷 Imagem";
   if (doc.messageType === "AUDIO") return "🎤 Áudio";
   if (doc.messageType === "DOCUMENT") return "📄 Documento";
+  if (doc.messageType === "VIDEO") return "🎥 Vídeo";
   if (doc.messageType === "STICKER") return "Figurinha";
   return "";
 }
@@ -155,7 +156,7 @@ export const ticketService = {
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
       include: {
-        queue: true,
+        queue: { include: { serviceIsland: { select: { allowAudioMessages: true } } } },
         target: true,
         messagingSession: true,
         messages: { orderBy: { createdAt: "asc" } },
@@ -226,13 +227,13 @@ export const ticketService = {
   async sendMessage(
     ticketId: string,
     userId: string,
-    input: { text: string; messageType?: "TEXT" | "AUDIO" | "IMAGE" | "DOCUMENT" | "STICKER"; mediaUrl?: string },
+    input: { text: string; messageType?: "TEXT" | "AUDIO" | "IMAGE" | "DOCUMENT" | "STICKER" | "VIDEO"; mediaUrl?: string },
   ) {
     console.log(`[DESK-MSG][ticket-service.sendMessage] início — ticketId=${ticketId} userId=${userId}`);
 
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
-      include: { messagingSession: true },
+      include: { messagingSession: true, queue: { include: { serviceIsland: { select: { allowAudioMessages: true } } } } },
     });
     if (!ticket) {
       console.error(`[DESK-MSG][ticket-service.sendMessage] ticket ${ticketId} não encontrado`);
@@ -247,6 +248,13 @@ export const ticketService = {
     if (ticket.status !== "IN_PROGRESS") {
       console.error(`[DESK-MSG][ticket-service.sendMessage] ticket ${ticketId} com status=${ticket.status}, esperado IN_PROGRESS`);
       throw new ValidationError("Ticket não está em atendimento.");
+    }
+
+    // Switch "Permitir envio de áudio" da ilha (Agent Console > Ilhas de
+    // Atendimento > Configurações Gerais).
+    if (input.messageType === "AUDIO" && !ticket.queue.serviceIsland.allowAudioMessages) {
+      console.error(`[DESK-MSG][ticket-service.sendMessage] ticketId=${ticketId} envio de áudio desativado na ilha`);
+      throw new ForbiddenError("O envio de áudio está desativado para a ilha deste ticket.");
     }
 
     if (input.messageType === "DOCUMENT" && !isSupportedDocument(input.text)) {
