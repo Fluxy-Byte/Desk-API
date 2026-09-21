@@ -39,6 +39,14 @@ const envSchema = z.object({
   SEAWEEDFS_S3_BUCKET: z.string().min(1),
   SEAWEEDFS_S3_REGION: z.string().default("us-east-1"),
   SEAWEEDFS_S3_PREFIX: z.string().default("fluxy-saas/desk-api"),
+  /// Outros prefixos do bucket (de outros serviços) que também precisam de
+  /// leitura pública — só este serviço aplica a policy do bucket, então é aqui
+  /// que eles são liberados: mídia recebida do cliente (Inbound-Service) e
+  /// áudio convertido pra OGG/Opus (Outbound-Worker, que a Meta baixa por
+  /// link). Separados por vírgula, sem barra no fim.
+  SEAWEEDFS_S3_PUBLIC_PREFIXES: z
+    .string()
+    .default("fluxy-saas/inbound-service/inbound-media,fluxy-saas/outbound-worker/converted-audio"),
 
   APP_TIMEZONE: z.string().default("America/Sao_Paulo"),
 });
