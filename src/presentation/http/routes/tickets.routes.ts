@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { carteiraService } from "../../../application/carteira/carteira-service";
 import { ticketService } from "../../../application/ticket/ticket-service";
 import { ValidationError } from "../../../domain/errors/app-error";
 import { requireAuth } from "../middlewares/require-auth";
@@ -109,5 +110,19 @@ ticketsRouter.post(
     const parsed = z.object({ userId: z.string().min(1) }).safeParse(req.body);
     if (!parsed.success) throw new ValidationError("Informe userId.");
     return ticketService.transferAttendant(String(req.params.id), req.auth!.userId, parsed.data.userId);
+  }),
+);
+
+ticketsRouter.get(
+  "/:id/carteiras",
+  routeHandler(async (req) => carteiraService.listForTicket(String(req.params.id), req.auth!.userId)),
+);
+
+ticketsRouter.patch(
+  "/:id/carteiras",
+  routeHandler(async (req) => {
+    const parsed = z.object({ carteiraIds: z.array(z.string().trim().min(1)) }).safeParse(req.body);
+    if (!parsed.success) throw new ValidationError("Informe carteiraIds.");
+    return carteiraService.setForTicket(String(req.params.id), req.auth!.userId, parsed.data.carteiraIds);
   }),
 );

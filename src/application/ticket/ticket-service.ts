@@ -156,7 +156,7 @@ export const ticketService = {
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
       include: {
-        queue: { include: { serviceIsland: { select: { allowAudioMessages: true } } } },
+        queue: { include: { serviceIsland: { select: { allowAudioMessages: true, allowAttendantCarteira: true } } } },
         target: true,
         messagingSession: true,
         messages: { orderBy: { createdAt: "asc" } },
