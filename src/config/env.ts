@@ -21,7 +21,7 @@ const envSchema = z.object({
   /// de lista explícita de origens do frontend.
   CORS_ALLOWED_ORIGINS: z
     .string()
-    .default("https://desk.fluxytechnologies.com.br,http://localhost:7080")
+    .default("https://desk.sturnusflow.com.br,http://localhost:7080")
     .transform((value) => value.split(",").map((origin) => origin.trim())),
 
   REDIS_HOST: z.string().min(1),
